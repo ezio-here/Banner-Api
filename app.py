@@ -186,6 +186,7 @@ async def get_banner(uid: str):
         raise HTTPException(status_code=400, detail="UID required")
 
     try:
+        # Fetch data from your API
         resp = await client.get(f"https://info-api-2-gamma.vercel.app/info?uid={uid}")
         
         if resp.status_code != 200:
@@ -193,23 +194,38 @@ async def get_banner(uid: str):
             
         data = resp.json()
         
+        # Extract data from your API structure
         account_info = data.get("AccountInfo", {})
-        equipped_items = data.get("EquippedItemsInfo", {})
-        profile_info = data.get("AccountProfileInfo", {})
         guild_info = data.get("GuildInfo", {})
         
-        if not account_info: raise HTTPException(status_code=404, detail="Not Found")
+        if not account_info: 
+            raise HTTPException(status_code=404, detail="Not Found")
         
-        avatar_task = fetch_image_bytes(equipped_items.get("EquippedAvatarId"))
-        banner_task = fetch_image_bytes(equipped_items.get("EquippedBannerId"))
+        # Get avatar ID from AccountInfo (AccountAvatarId)
+        avatar_id = account_info.get("AccountAvatarId")
         
-        pin_id = profile_info.get("Title")
-        pin_task = fetch_image_bytes(pin_id) if (pin_id and str(pin_id) != "0") else asyncio.sleep(0)
+        # Get banner ID from AccountInfo (AccountBannerId)
+        banner_id = account_info.get("AccountBannerId")
+        
+        # Get title/pin from AccountInfo (Title)
+        pin_id = account_info.get("Title")
+        
+        # Fetch images concurrently
+        avatar_task = fetch_image_bytes(avatar_id)
+        banner_task = fetch_image_bytes(banner_id)
+        
+        # Handle pin image (skip if 0 or None)
+        if pin_id and str(pin_id) != "0":
+            pin_task = fetch_image_bytes(pin_id)
+        else:
+            pin_task = asyncio.sleep(0, result=None)
 
         results = await asyncio.gather(avatar_task, banner_task, pin_task)
         avatar_bytes, banner_bytes, pin_bytes = results[0], results[1], results[2]
         
-        if pin_bytes is None: pin_bytes = b''
+        # Ensure pin_bytes is bytes or empty
+        if pin_bytes is None: 
+            pin_bytes = b''
 
         loop = asyncio.get_event_loop()
         banner_data = {
@@ -218,17 +234,24 @@ async def get_banner(uid: str):
             "GuildName": guild_info.get("GuildName", "")
         }
         
+        # Process image in thread pool
         img_io = await loop.run_in_executor(
             process_pool, 
             process_banner_image, 
             banner_data, avatar_bytes, banner_bytes, pin_bytes
         )
         
-        return Response(content=img_io.getvalue(), media_type="image/png", headers={"Cache-Control": "public, max-age=300"})
+        return Response(
+            content=img_io.getvalue(), 
+            media_type="image/png", 
+            headers={"Cache-Control": "public, max-age=300"}
+        )
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 if __name__ == '__main__':
     import uvicorn
