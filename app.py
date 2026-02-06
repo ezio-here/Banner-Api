@@ -23,7 +23,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-INFO_API_URL = "https://fffinfo.tsunstudio.pw/get"
+INFO_API_URL = "https://info-api-2-gamma.vercel.app/info?uid={uid}"
 FONT_FILE = "arial_unicode_bold.otf"
 FONT_CHEROKEE = "NotoSansCherokee.ttf"
 
@@ -186,7 +186,7 @@ async def get_banner(uid: str):
         raise HTTPException(status_code=400, detail="UID required")
 
     try:
-        resp = await client.get(f"{INFO_API_URL}?uid={uid}")
+        resp = await client.get(f"https://info-api-2-gamma.vercel.app/info?uid={uid}")
         
         if resp.status_code != 200:
             raise HTTPException(status_code=502, detail="Info API Error")
